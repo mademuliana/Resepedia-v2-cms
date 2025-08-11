@@ -1,0 +1,23 @@
+What you’ve done today:
+- Designed migrations and models for catering app entities (Ingredient, Recipe, Product, Order).
+- Created Filament Resources and forms, including:
+  * Ingredient resource with proper fields.
+  * Recipe resource with repeater for ingredients.
+  * Product resource with relation to recipes.
+  * Order resource with relations and tables.
+- Implemented dynamic recalculation closures for recipe totals (total calories, total price, per portion values).
+- Refined the recalculation closure to flexibly handle different scenarios (total only, per portion only, or both).
+- Learned how to handle reactive form inputs properly in Filament without premature saving.
+- Improved numeric formatting to always show 2 decimals.
+- Explained how to prevent auto-submit on enter for inputs.
+
+Next action list (for tomorrow and next steps):
+- Rename and restructure “total price” fields in Recipe and Ingredient to be cost instead of price (and make these cost fields non-editable).
+- Add a cost field to the Product table, which will be used later for calculations like recommended price.
+- Add UI fields in Product resource to display:
+  * Cost of the item (calculated or stored)
+  * Recommended price (calculated)
+- Create calculation functions:
+  * For Product: Calculate cost and recommended price based on related recipes/ingredients.
+  * For Order: Calculate total cost and price based on products and quantities.
+- (Optional) Write seeders or update existing ones to populate new cost fields with dummy data.
