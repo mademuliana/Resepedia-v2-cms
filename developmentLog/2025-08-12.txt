@@ -1,0 +1,14 @@
+Aug 12, 2025 – 9:38
+
+Tasks Completed:
+- Renamed and restructured “total price” fields in Recipe and Ingredient to cost instead of price, and made these cost fields non-editable.
+- Added a cost field to the Product table for future calculations like recommended price.
+
+Next Focus:
+- Resolve the issue with Recipe total cost calculation on the Product table.
+- Add UI fields in Product resource to display:
+  * Cost of the item (calculated or stored)
+  * Recommended price (calculated)
+- Create calculation functions:
+  * For Product: Calculate cost and recommended price based on related recipes/ingredients.
+  * For Order: Calculate total cost and price based on products and quantities.

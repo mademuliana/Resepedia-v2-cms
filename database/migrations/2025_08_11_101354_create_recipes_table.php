@@ -13,7 +13,7 @@ return new class extends Migration {
             $table->integer('prep_time_minutes')->default(0);
             $table->decimal('portion_size', 8, 2)->default(0); // in grams/ml
             $table->decimal('total_calorie_per_portion', 8, 2)->default(0);
-            $table->decimal('total_price_per_portion', 10, 2)->default(0);
+            $table->decimal('total_cost_per_portion', 10, 2)->default(0);
             $table->timestamps();
         });
     }

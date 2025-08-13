@@ -1,79 +1,130 @@
 <?php
 
 namespace App\Helpers;
+
 use App\Models\Ingredient;
+use App\Models\Recipe;
 
 class CalculationHelper
 {
-    public static function recalculateRecipeTotals(array $fieldNames = []): \Closure
+    /* ---------------------------
+       Low-level utility functions
+    --------------------------- */
+
+    protected static function calculateTotalsFromItems(array $items, string $costKey, string $calorieKey): array
     {
-        return function (callable $set, callable $get) use ($fieldNames) {
-            $ingredientsKey = $fieldNames['ingredients'];
-            $portionKey = $fieldNames['portion'] ?? null;
+        $totalCost = 0;
+        $totalCalories = 0;
 
-            $ingredients = $get($ingredientsKey) ?? [];
+        foreach ($items as $item) {
+            $totalCost    += $item[$costKey] ?? 0;
+            $totalCalories += $item[$calorieKey] ?? 0;
+        }
 
-            // Sum ingredient totals
-            $totalCalories = 0;
-            $totalPrice = 0;
+        return [$totalCost, $totalCalories];
+    }
 
-            // If 'total_calorie' and 'total_price' keys exist, set raw totals
-            if (isset($fieldNames['total_calorie']) && isset($fieldNames['total_price'])) {
-                $quantityKey = $fieldNames['quantity'] ?? null;
+    protected static function calculatePerPortion(float $total, float $portionSize): float
+    {
+        return $portionSize > 0 ? $total / $portionSize : 0;
+    }
 
-                // If quantity key exists, multiply totals by quantity
-                if ($quantityKey !== null) {
-                    $quantity = $get($quantityKey) ?: 1;
-                    $totalCalories *= $quantity;
-                    $totalPrice *= $quantity;
+    protected static function formatNumber(float $value): string
+    {
+        return number_format($value, 2, '.', '');
+    }
+
+    /* ---------------------------
+       Higher-level update helpers
+    --------------------------- */
+
+    public static function updateProductRecipeTotals(array $fields): \Closure
+    {
+        return function (callable $set, callable $get) use ($fields) {
+            // Get full row snapshot
+            $currentRow = $get('..');
+
+            $recipeId = $currentRow['recipe_id'] ?? null;
+            $quantity = $currentRow['quantity'] ?? 1;
+
+            if ($recipeId) {
+                $recipe = Recipe::find($recipeId);
+
+                if ($recipe) {
+                    $rowCost    = ($recipe->total_cost_per_portion ?? 0) * $quantity;
+                    $rowCalorie = ($recipe->total_calorie_per_portion ?? 0) * $quantity;
+
+                    $set($fields['recipe_total_cost'], $rowCost);
+                    $set($fields['recipe_total_calorie'], $rowCalorie);
                 }
-                $set($fieldNames['total_price'], number_format($totalPrice, 2, '.', ''));
-                $set($fieldNames['total_calorie'], number_format($totalCalories, 2, '.', ''));
             }
 
-            foreach ($ingredients as $item) {
-                $totalCalories += $item['total_calorie'] ?? 0;
-                $totalPrice += $item['total_price'] ?? 0;
-            }
+            // Aggregate all recipes for product totals
+            $allRecipes = $get('../../' . $fields['recipes']) ?? [];
 
-            // Calculate per portion totals only if portionKey and per portion keys are present
+            [$totalCost, $totalCalorie] = self::calculateTotalsFromItems(
+                $allRecipes,
+                $fields['recipe_total_cost'],
+                $fields['recipe_total_calorie']
+            );
+
+            $set('../../' . $fields['product_total_cost'], $totalCost);
+            $set('../../' . $fields['product_total_calorie'], $totalCalorie);
+        };
+    }
+
+    public static function recalculateRecipeTotals(array $field): \Closure
+    {
+        return function (callable $set, callable $get) use ($field) {
+            // Use full form snapshot (not just repeater row)
+            $ingredients = $get($field['ingredients']) ?? [];
+
+            [$totalCost, $totalCalories] = self::calculateTotalsFromItems(
+                $ingredients,
+                $field['total_cost'],
+                $field['total_calorie']
+            );
+
+            // Per portion
             if (
-                $portionKey !== null
-                && isset($fieldNames['total_calorie_per_portion'])
-                && isset($fieldNames['total_price_per_portion'])
+                isset($field['portion']) &&
+                isset($field['total_cost_per_portion']) &&
+                isset($field['total_calorie_per_portion'])
             ) {
-                $portionSize = $get($portionKey) ?: 1;
+                $portionSize = $get($field['portion']) ?: 1;
 
-                $caloriesPerPortion = $portionSize > 0 ? $totalCalories / $portionSize : 0;
-                $pricePerPortion = $portionSize > 0 ? $totalPrice / $portionSize : 0;
-
-                $set($fieldNames['total_price_per_portion'], number_format($pricePerPortion, 2, '.', ''));
-                $set($fieldNames['total_calorie_per_portion'], number_format($caloriesPerPortion, 2, '.', ''));
+                $set($field['total_cost_per_portion'], self::formatNumber(
+                    self::calculatePerPortion($totalCost, $portionSize)
+                ));
+                $set($field['total_calorie_per_portion'], self::formatNumber(
+                    self::calculatePerPortion($totalCalories, $portionSize)
+                ));
             }
         };
     }
 
-
-    public static function updateIngridientTotal(array $fieldNames = []): \Closure
+    public static function updateIngredientsTotal(array $field): \Closure
     {
-        return function (callable $set, callable $get) use ($fieldNames) {
-            $ingredientKey = $fieldNames['ingredient'];
-            $quantityKey = $fieldNames['quantity'];
-            $totalCalorieKey = $fieldNames['total_calorie'];
-            $totalPriceKey = $fieldNames['total_price'];
+        return function (callable $set, callable $get) use ($field) {
+            // Get the full repeater row snapshot
+            $currentRow = $get('..');
 
-            $ingredient = Ingredient::find($get($ingredientKey));
-            $quantity = $get($quantityKey);
+            $ingredientId = $currentRow['ingredient_id'] ?? null;
+            $quantity     = $currentRow['quantity'] ?? 0;
 
-            $totalCalories = $quantity * $ingredient->calorie_per_unit;
-            $totalPrice = $quantity * $ingredient->price_per_unit;
+            if (!$ingredientId || $quantity <= 0) {
+                return;
+            }
+
+            $ingredient = Ingredient::find($ingredientId);
 
             if ($ingredient) {
-                $set($totalPriceKey, number_format($totalPrice, 2, '.', ''));
-                $set($totalCalorieKey, number_format($totalCalories, 2, '.', ''));
+                $totalCost     = $quantity * $ingredient->cost_per_unit;
+                $totalCalories = $quantity * $ingredient->calorie_per_unit;
+
+                $set($field['total_cost'], self::formatNumber($totalCost));
+                $set($field['total_calorie'], self::formatNumber($totalCalories));
             }
         };
     }
-
 }
-

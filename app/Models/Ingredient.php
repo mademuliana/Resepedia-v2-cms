@@ -11,14 +11,14 @@ class Ingredient extends Model
         'type',
         'unit',
         'calorie_per_unit',
-        'price_per_unit',
+        'cost_per_unit',
         'stock_quantity',
     ];
 
     public function recipes()
     {
         return $this->belongsToMany(Recipe::class , 'recipe_ingredient')
-            ->withPivot(['quantity', 'total_price', 'total_calorie'])
+            ->withPivot(['quantity', 'total_cost', 'total_calorie'])
             ->withTimestamps();
     }
 }
