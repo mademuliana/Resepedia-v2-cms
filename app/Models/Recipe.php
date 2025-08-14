@@ -12,6 +12,7 @@ class Recipe extends Model
         'portion_size',
         'total_calorie_per_portion',
         'total_cost_per_portion',
+        'notes',
     ];
 
     public function ingredients()
@@ -26,5 +27,11 @@ class Recipe extends Model
         return $this->belongsToMany(Product::class , 'product_recipe')
             ->withPivot(['quantity', 'recipe_total_cost', 'recipe_total_calorie'])
             ->withTimestamps();
+    }
+
+    public function steps()
+    {
+        return $this->hasMany(\App\Models\RecipeStep::class)
+            ->orderBy('step_no');
     }
 }

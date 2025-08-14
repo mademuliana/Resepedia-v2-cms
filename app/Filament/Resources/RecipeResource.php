@@ -12,6 +12,7 @@ use Filament\Forms\Set;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Illuminate\Support\Collection;
 
 class RecipeResource extends Resource
 {
@@ -116,6 +117,75 @@ class RecipeResource extends Resource
                         ->createItemButtonLabel('Add Ingredient')
                         ->default([]),
                 ]),
+            Forms\Components\Section::make('Steps')
+                ->description('Ordered instructions for preparing the recipe.')
+                ->schema([
+                    Forms\Components\Repeater::make('steps')
+                        ->relationship('steps')           // hasMany(RecipeStep::class)
+                        ->defaultItems(0)
+                        ->reorderable()                   // drag & drop order in UI
+                        ->itemLabel(fn (array $state): ?string => isset($state['step_no']) ? 'Step '.$state['step_no'] : null)
+                        ->columns(12)
+                        ->schema([
+                            Forms\Components\TextInput::make('step_no')
+                                ->label('No.')
+                                ->numeric()
+                                ->minValue(1)
+                                ->disabled()             // we auto-assign based on order
+                                ->dehydrated(true)       // still save to DB
+                                ->columnSpan(2),
+
+                            Forms\Components\Textarea::make('instruction')
+                                ->required()
+                                ->rows(2)
+                                ->columnSpan(6),
+
+                            Forms\Components\TextInput::make('duration_minutes')
+                                ->numeric()
+                                ->minValue(0)
+                                ->nullable()
+                                ->suffix('min')
+                                ->columnSpan(2),
+
+                            Forms\Components\TextInput::make('media_url')
+                                ->url()
+                                ->placeholder('https://...')
+                                ->nullable()
+                                ->columnSpan(2),
+                        ])
+
+                        // Normalize numbering whenever hydrated/changed/reordered:
+                        ->afterStateHydrated(function (Get $get, Set $set) {
+                            $rows = $get('steps') ?? [];
+                            $n = 1;
+                            foreach ($rows as $key => $row) {
+                                $rows[$key]['step_no'] = $n++;
+                            }
+                            $set('steps', $rows);
+                        })
+                        ->afterStateUpdated(function (Get $get, Set $set) {
+                            $rows = $get('steps') ?? [];
+                            $n = 1;
+                            foreach ($rows as $key => $row) {
+                                $rows[$key]['step_no'] = $n++;
+                            }
+                            $set('steps', $rows);
+                        })
+
+
+                        // Extra safety: before saving each row, trim and coerce types
+                        ->mutateRelationshipDataBeforeCreateUsing(function (array $data) {
+                            $data['instruction'] = trim((string) ($data['instruction'] ?? ''));
+                            $data['duration_minutes'] = $data['duration_minutes'] !== null ? (int) $data['duration_minutes'] : null;
+                            return $data;
+                        })
+                        ->mutateRelationshipDataBeforeSaveUsing(function (array $data) {
+                            $data['instruction'] = trim((string) ($data['instruction'] ?? ''));
+                            $data['duration_minutes'] = $data['duration_minutes'] !== null ? (int) $data['duration_minutes'] : null;
+                            return $data;
+                        }),
+                ])
+                ->collapsible(),
         ]);
     }
 
@@ -187,9 +257,23 @@ class RecipeResource extends Resource
                 Tables\Actions\EditAction::make(),
             ])
             ->bulkActions([
-                Tables\Actions\BulkActionGroup::make([
-                    Tables\Actions\DeleteBulkAction::make(),
-                ]),
+                Tables\Actions\BulkAction::make('selectionDetails')
+                    ->label('View selection details')
+                    ->icon('heroicon-o-eye')
+                    ->color('primary')
+                    ->action(function (Collection $records) {
+                        $ids = $records->pluck('id')->all();
+                        if (empty($ids)) return;
+                        // optional: keep in session as fallback
+                        session()->put('recipes.table.selected', $ids);
+                        // go to the report page with ids
+                        return redirect(
+                            static::getUrl('selection', ['ids' => implode(',', $ids)])
+                        );
+                    }),
+
+                Tables\Actions\DeleteBulkAction::make()
+                    ->deselectRecordsAfterCompletion(),
             ]);
     }
 
@@ -206,6 +290,7 @@ class RecipeResource extends Resource
             'index' => Pages\ListRecipes::route('/'),
             'create' => Pages\CreateRecipe::route('/create'),
             'edit' => Pages\EditRecipe::route('/{record}/edit'),
+            'selection' => Pages\RecipeSelectionDetails::route('/selection-details'),
         ];
     }
 

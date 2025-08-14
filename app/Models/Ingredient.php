@@ -18,7 +18,7 @@ class Ingredient extends Model
     public function recipes()
     {
         return $this->belongsToMany(Recipe::class , 'recipe_ingredient')
-            ->withPivot(['quantity', 'total_cost', 'total_calorie'])
+            ->withPivot(['quantity', 'ingredient_total_cost', 'ingredient_total_calorie'])
             ->withTimestamps();
     }
 }

@@ -12,6 +12,7 @@ use Filament\Forms\Set;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Illuminate\Support\Collection;
 
 class ProductResource extends Resource
 {
@@ -141,8 +142,25 @@ class ProductResource extends Resource
                 Tables\Actions\EditAction::make(),
             ])
             ->bulkActions([
+                Tables\Actions\BulkAction::make('selectionDetails')
+                    ->label('View selection details')
+                    ->icon('heroicon-o-eye')
+                    ->color('primary')
+                    ->action(function (Collection $records) {
+                        $ids = $records->pluck('id')->all();
+                        if (empty($ids)) return;
+
+                        // (optional) keep in session as a fallback
+                        session()->put('products.table.selected', $ids);
+
+                        // redirect to the report page with ids
+                        return redirect(
+                            static::getUrl('selection', ['ids' => implode(',', $ids)])
+                        );
+                    }),
+
                 Tables\Actions\DeleteBulkAction::make()
-                    ->deselectRecordsAfterCompletion(), // so actions don't clear your saved selection
+                    ->deselectRecordsAfterCompletion(),
             ]);
     }
 
@@ -157,6 +175,7 @@ class ProductResource extends Resource
             'index' => Pages\ListProducts::route('/'),
             'create' => Pages\CreateProduct::route('/create'),
             'edit' => Pages\EditProduct::route('/{record}/edit'),
+            'selection' => Pages\ProductSelectionDetails::route('/selection-details'),
         ];
     }
 

@@ -11,6 +11,7 @@ class Product extends Model
         'price',
         'total_calorie',
         'total_cost',
+        'notes',
     ];
 
     public function recipes()
