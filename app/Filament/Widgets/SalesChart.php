@@ -2,21 +2,14 @@
 
 namespace App\Filament\Widgets;
 
-use App\Models\Payment;
-use Carbon\Carbon;
+use App\Services\Analytics\SalesAnalytics;
 use Filament\Widgets\ChartWidget;
-use Illuminate\Support\Facades\DB;
 
 class SalesChart extends ChartWidget
 {
-    protected static ?string $heading = 'Sales (Paid Amount) — Last 30 Days';
-    protected static ?int $sort = -100;
-
-    /** Make this widget span the full row (standalone graph) */
-    public function getColumnSpan(): string|int|array
-    {
-        return 'full';
-    }
+    protected static ?string $heading = 'Sales (Last 30 Days)';
+    protected static ?int $sort = -100;          // keep at the very top
+    protected int|string|array $columnSpan = 'full';
 
     protected function getType(): string
     {
@@ -25,35 +18,25 @@ class SalesChart extends ChartWidget
 
     protected function getData(): array
     {
-        $end   = Carbon::today();
-        $start = $end->copy()->subDays(29);
+        $end   = now();
+        $start = now()->subDays(29);
 
-        // Fetch paid amounts per day from payments (true cash-in)
-        $rows = Payment::query()
-            ->selectRaw("DATE(paid_at) as d, SUM(amount) as paid_total")
-            ->where('status', 'paid')
-            ->whereBetween('paid_at', [$start->startOfDay(), $end->endOfDay()])
-            ->groupBy(DB::raw('DATE(paid_at)'))
-            ->orderBy(DB::raw('DATE(paid_at)'))
-            ->get()
-            ->keyBy('d');
+        // Admins are scoped by global scope; super admin sees all (companyId = null)
+        $companyId = auth()->user()?->company_id ?: null;
 
-        // Normalize labels & dataset for all 30 days
-        $labels = [];
-        $data   = [];
-        for ($day = $start->copy(); $day->lte($end); $day->addDay()) {
-            $key = $day->toDateString();
-            $labels[] = $day->format('M j');
-            $data[] = (float) ($rows[$key]->paid_total ?? 0);
-        }
+        $series = app(SalesAnalytics::class)->paidByDay($start, $end, $companyId);
 
         return [
-            'labels' => $labels,
+            'labels' => $series['labels'],
             'datasets' => [
                 [
-                    'label' => 'Paid (IDR)',
-                    'data'  => $data,
-                    // no custom colors/styles per your preference; defaults are fine
+                    'label' => 'Paid Amount',
+                    'data'  => $series['data'],
+                    // no explicit colors (keeps theme defaults)
+                    'tension' => 0.3,
+                    'pointRadius' => 2,
+                    'borderWidth' => 2,
+                    'fill' => false,
                 ],
             ],
         ];

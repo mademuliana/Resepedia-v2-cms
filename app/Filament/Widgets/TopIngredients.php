@@ -4,36 +4,38 @@ namespace App\Filament\Widgets;
 
 use App\Models\Ingredient;
 use Filament\Tables;
-use Filament\Tables\Table;
 use Filament\Widgets\TableWidget as BaseWidget;
+use Filament\Tables\Table;
 
 class TopIngredients extends BaseWidget
 {
-    protected static ?string $heading = 'Most Used Ingredients (in Recipes)';
-    protected static ?int $sort = 20;
-
-    public function getColumnSpan(): string|int|array
-    {
-        return 1;
-    }
+    protected static ?string $heading = 'Most Used Ingredients';
+    protected static ?int $sort = 30; // second row (left)
 
     public function table(Table $table): Table
     {
-        $query = Ingredient::query()
-            ->whereHas('recipes') // must appear in recipe_ingredient
-            ->withCount(['recipes as usage_count'])
-            ->withSum('recipes as total_qty', 'recipe_ingredient.quantity')
-            ->orderByDesc('usage_count')
-            ->limit(10);
-
         return $table
-            ->query($query)
+            ->query(
+                // Only ingredients used in recipes; adds counts & sums; limit(10)
+                Ingredient::query()->mostUsed(10)
+            )
             ->columns([
-                \Filament\Tables\Columns\TextColumn::make('name')->searchable(),
-                \Filament\Tables\Columns\TextColumn::make('usage_count')->label('Recipes')->numeric(),
-                \Filament\Tables\Columns\TextColumn::make('total_qty')
+                Tables\Columns\TextColumn::make('name')
+                    ->searchable(),
+
+                Tables\Columns\TextColumn::make('usage_count')
+                    ->label('Recipes')
+                    ->numeric(),
+
+                Tables\Columns\TextColumn::make('total_qty')
                     ->label('Total Qty')
-                    ->formatStateUsing(fn ($state, $record) => number_format((float) $state, 0) . ' ' . $record->unit),
+                    ->state(function ($record) {
+                        $qty  = (float) ($record->total_qty ?? 0);
+                        $unit = $record->unit ?? '';
+                        // compact quantity string without extra zeros
+                        $display = rtrim(rtrim(number_format($qty, 0, '.', ','), '0'), '.');
+                        return $display . ($unit ? " {$unit}" : '');
+                    }),
             ])
             ->paginated(false);
     }

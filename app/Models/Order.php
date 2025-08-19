@@ -5,6 +5,8 @@ namespace App\Models;
 use App\Traits\BelongsToCompany;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Auth;
+use App\Models\Builders\OrderBuilder;
+use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
 
 class Order extends Model
 {
@@ -41,6 +43,11 @@ class Order extends Model
         'balance_due',
         'is_fully_paid',
     ];
+
+    public function newEloquentBuilder($query): EloquentBuilder
+    {
+        return new OrderBuilder($query);
+    }
 
     // Relationships
     public function customer()

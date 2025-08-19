@@ -16,6 +16,9 @@ use Filament\Tables;
 use Filament\Tables\Table;
 use Filament\Tables\Actions\Action;
 use Illuminate\Support\Collection;
+use App\Support\Format;
+use App\Services\Calculations\OrderFormCalculator;
+
 
 class OrderResource extends Resource
 {
@@ -153,7 +156,7 @@ class OrderResource extends Resource
                                     ->numeric()
                                     ->required()
                                     ->default(1)
-                                    ->reactive(),
+                                    ->live(debounce: 300),
 
                                 Forms\Components\TextInput::make('product_total_price')
                                     ->label('Price')
@@ -472,21 +475,21 @@ class OrderResource extends Resource
                     ->toggleable(isToggledHiddenByDefault: false),
 
                 Tables\Columns\TextColumn::make('total_price')
-                    ->money('idr', true)
+                    ->formatStateUsing(fn ($state) => Format::idr($state))
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: false),
 
                 Tables\Columns\TextColumn::make('paid_total')
                     ->label('Paid')
                     ->state(fn($record) => $record->paid_total)
-                    ->formatStateUsing(fn($state) => 'Rp.' . number_format((float)$state, 2, '.', ','))
+                    ->formatStateUsing(fn ($state) => Format::idr($state))
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: false),
 
                 Tables\Columns\TextColumn::make('balance_due')
                     ->label('Balance')
                     ->state(fn($record) => $record->balance_due)
-                    ->formatStateUsing(fn($state) => 'Rp.' . number_format((float)$state, 2, '.', ','))
+                    ->formatStateUsing(fn ($state) => Format::idr($state))
                     ->color(fn($state) => (float)$state > 0 ? 'danger' : 'success')
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: false),
@@ -499,6 +502,7 @@ class OrderResource extends Resource
 
                 Tables\Columns\TextColumn::make('total_calorie')
                     ->sortable()
+                    ->formatStateUsing(fn ($state) => Format::kcal($state))
                     ->toggleable(isToggledHiddenByDefault: true),
 
                 Tables\Columns\TextColumn::make('products_list')
@@ -508,7 +512,7 @@ class OrderResource extends Resource
                             ->map(fn($item) => e($item->name) . " ({$item->pivot->quantity}ps)")
                             ->implode('<br>')
                     )
-                    ->html()      // allow <br>
+                    ->html()
                     ->wrap()
                     ->toggleable(isToggledHiddenByDefault: false)
 
@@ -575,49 +579,14 @@ class OrderResource extends Resource
      */
     protected static function computeRowsAndTotals(array $rows, Set $set, Get $get): void
     {
-        // Batch-load products used in rows
-        $ids = collect($rows)->pluck('product_id')->filter()->unique()->values();
+        /** @var OrderFormCalculator $svc */
+        $svc  = app(OrderFormCalculator::class);
+        $calc = $svc->compute($rows, true); // formatted strings for UI
 
-        $productMap = Product::query()
-            ->whereIn('id', $ids)
-            ->get(['id', 'price', 'total_calorie'])
-            ->keyBy('id');
-
-        $totalPrice = 0.0;
-        $totalCal   = 0.0;
-        $normalized = [];
-
-        foreach ($rows as $i => $row) {
-            $pid = $row['product_id'] ?? null;
-            $qty = (float) ($row['quantity'] ?? 0);
-
-            $unitPrice = ($pid && $productMap->has($pid))
-                ? (float) $productMap[$pid]->price
-                : 0.0;
-
-            $unitCal = ($pid && $productMap->has($pid))
-                ? (float) $productMap[$pid]->total_calorie
-                : 0.0;
-
-            $rowPrice = $qty * $unitPrice;
-            $rowCal   = $qty * $unitCal;
-
-            $totalPrice += $rowPrice;
-            $totalCal   += $rowCal;
-
-            // Normalize row fields (keep existing names)
-            $normalized[$i] = array_merge($row, [
-                'product_total_price'    => self::fmt($rowPrice),
-                'product_total_calorie'  => self::fmt($rowCal),
-            ]);
-        }
-
-        // Single write: keep UI consistent
-        $set('products', array_values($normalized));
-
-        // Top-level totals
-        $set('total_price',   self::fmt($totalPrice));
-        $set('total_calorie', self::fmt($totalCal));
+        // Keep the exact same setters to avoid UI race conditions
+        $set('products', array_values($calc['rows']));
+        $set('total_price',   $calc['total_price']);
+        $set('total_calorie', $calc['total_calorie']);
     }
 
     protected static function fmt(float $n): string

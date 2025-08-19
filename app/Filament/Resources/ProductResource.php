@@ -13,6 +13,8 @@ use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Support\Collection;
+use App\Support\Format;
+use App\Services\Calculations\ProductFormCalculator;
 
 class ProductResource extends Resource
 {
@@ -74,11 +76,9 @@ class ProductResource extends Resource
                         ->reactive()
                         ->debounce(300)
                         ->afterStateHydrated(function (Set $set, ?array $state, Get $get) {
-                            // Normalize and compute once on load/open
                             self::computeRowsAndTotals($state ?? [], $set, $get);
                         })
                         ->afterStateUpdated(function (?array $state, Set $set, Get $get) {
-                            // Single source of truth: recompute using ENTIRE repeater state snapshot
                             self::computeRowsAndTotals($state ?? [], $set, $get);
                         })
                         ->schema([
@@ -87,13 +87,13 @@ class ProductResource extends Resource
                                 ->options(Recipe::all()->pluck('name', 'id'))
                                 ->searchable()
                                 ->required()
-                                ->reactive(), // no per-field afterStateUpdated (avoid race)
+                                ->reactive(),
 
                             Forms\Components\TextInput::make('quantity')
                                 ->numeric()
                                 ->required()
                                 ->default(1)
-                                ->reactive(), // changes here trigger the repeater hook
+                                ->live(debounce: 300),
 
                             Forms\Components\TextInput::make('recipe_total_cost')
                                 ->disabled()
@@ -125,24 +125,18 @@ class ProductResource extends Resource
                     ->toggleable(isToggledHiddenByDefault: false),
 
                 Tables\Columns\TextColumn::make('price')
-                    ->formatStateUsing(function ($state) {
-                        return 'Rp.' . $state;
-                    })
+                    ->formatStateUsing(fn ($state) => Format::idr($state))
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: false),
 
                 Tables\Columns\TextColumn::make('total_cost')
-                    ->formatStateUsing(function ($state) {
-                        return 'Rp.' . $state;
-                    })
+                    ->formatStateUsing(fn ($state) => Format::idr($state))
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: false),
 
                 Tables\Columns\TextColumn::make('total_calorie')
                     ->sortable()
-                    ->formatStateUsing(function ($state) {
-                        return $state . 'kcal';
-                    })
+                    ->formatStateUsing(fn ($state) => Format::kcal($state))
                     ->toggleable(isToggledHiddenByDefault: false),
 
                 Tables\Columns\TextColumn::make('recipes_list')
@@ -210,53 +204,13 @@ class ProductResource extends Resource
      */
     protected static function computeRowsAndTotals(array $rows, Set $set, Get $get): void
     {
-        // Batch-load needed recipes
-        $ids = collect($rows)->pluck('recipe_id')->filter()->unique()->values();
+        /** @var ProductFormCalculator $svc */
+        $svc  = app(ProductFormCalculator::class);
+        $calc = $svc->compute($rows, true); // formatted strings for UI
 
-        $recipeMap = Recipe::query()
-            ->whereIn('id', $ids)
-            ->get(['id', 'total_cost_per_portion', 'total_calorie_per_portion'])
-            ->keyBy('id');
-
-        $totalCost = 0.0;
-        $totalCal  = 0.0;
-        $normalized = [];
-
-        foreach ($rows as $i => $row) {
-            $rid = $row['recipe_id'] ?? null;
-            $qty = (float) ($row['quantity'] ?? 0);
-
-            $costPerPortion = ($rid && $recipeMap->has($rid))
-                ? (float) $recipeMap[$rid]->total_cost_per_portion
-                : 0.0;
-
-            $calPerPortion = ($rid && $recipeMap->has($rid))
-                ? (float) $recipeMap[$rid]->total_calorie_per_portion
-                : 0.0;
-
-            $rowCost = $qty * $costPerPortion;
-            $rowCal  = $qty * $calPerPortion;
-
-            $totalCost += $rowCost;
-            $totalCal  += $rowCal;
-
-            // Normalize row (UI-only fields)
-            $normalized[$i] = array_merge($row, [
-                'recipe_total_cost'     => self::fmt($rowCost),
-                'recipe_total_calorie'  => self::fmt($rowCal),
-            ]);
-        }
-
-        // Single write for the entire repeater to keep UI in sync
-        $set('recipes', array_values($normalized));
-
-        // Top-level totals (display-only as per your form: dehydrated(false))
-        $set('total_cost',    self::fmt($totalCost));
-        $set('total_calorie', self::fmt($totalCal));
-    }
-
-    protected static function fmt(float $n): string
-    {
-        return number_format($n, 2, '.', '');
+        // Keep your original set() pattern to avoid UI race conditions
+        $set('recipes', $calc['rows']);
+        $set('total_cost',    $calc['total_cost']);
+        $set('total_calorie', $calc['total_calorie']);
     }
 }

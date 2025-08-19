@@ -4,34 +4,32 @@ namespace App\Filament\Widgets;
 
 use App\Models\Recipe;
 use Filament\Tables;
-use Filament\Tables\Table;
 use Filament\Widgets\TableWidget as BaseWidget;
+use Filament\Tables\Table;
 
 class TopRecipes extends BaseWidget
 {
-    protected static ?string $heading = 'Most Used Recipes (in Products)';
-    protected static ?int $sort = 40;
-
-    public function getColumnSpan(): string|int|array
-    {
-        return 1;
-    }
+    protected static ?string $heading = 'Most Used Recipes';
+    protected static ?int $sort = 40; // second row (right)
 
     public function table(Table $table): Table
     {
-        $query = Recipe::query()
-            ->whereHas('products') // must appear in product_recipe
-            ->withCount(['products as usage_count'])
-            ->withSum('products as total_qty', 'product_recipe.quantity')
-            ->orderByDesc('usage_count')
-            ->limit(10);
-
         return $table
-            ->query($query)
+            ->query(
+                // Only recipes used by products; adds counts & sums; limit(10)
+                Recipe::query()->mostUsed(10)
+            )
             ->columns([
-                \Filament\Tables\Columns\TextColumn::make('name')->searchable(),
-                \Filament\Tables\Columns\TextColumn::make('usage_count')->label('Products')->numeric(),
-                \Filament\Tables\Columns\TextColumn::make('total_qty')->label('Total Qty')->numeric(),
+                Tables\Columns\TextColumn::make('name')
+                    ->searchable(),
+
+                Tables\Columns\TextColumn::make('usage_count')
+                    ->label('Products')
+                    ->numeric(),
+
+                Tables\Columns\TextColumn::make('total_qty')
+                    ->label('Total Qty')
+                    ->numeric(),
             ])
             ->paginated(false);
     }

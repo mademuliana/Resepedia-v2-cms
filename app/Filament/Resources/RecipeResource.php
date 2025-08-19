@@ -13,6 +13,8 @@ use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
 use Illuminate\Support\Collection;
+use App\Support\Format;
+use App\Services\Calculations\RecipeFormCalculator;
 
 class RecipeResource extends Resource
 {
@@ -105,7 +107,7 @@ class RecipeResource extends Resource
                             Forms\Components\TextInput::make('quantity')
                                 ->numeric()
                                 ->required()
-                                ->reactive()
+                                ->live(debounce: 300)
                                 ->default(0.00)
                                 ->suffix(function (callable $get) {
                                     $ingredientId = $get('ingredient_id');
@@ -217,33 +219,25 @@ class RecipeResource extends Resource
                     ->searchable(),
                 Tables\Columns\TextColumn::make('prep_time_minutes')
                     ->numeric()
-                    ->formatStateUsing(function ($state) {
-                        return $state . ' minute';
-                    })
+                    ->formatStateUsing(fn ($state) => Format::minute($state))
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: false),
 
                 Tables\Columns\TextColumn::make('portion_size')
                     ->numeric()
-                    ->formatStateUsing(function ($state) {
-                        return $state . ' pcs';
-                    })
+                    ->formatStateUsing(fn ($state) => Format::pcs($state))
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: false),
 
                 Tables\Columns\TextColumn::make('total_calorie_per_portion')
                     ->numeric()
-                    ->formatStateUsing(function ($state) {
-                        return $state . ' kcal';
-                    })
+                    ->formatStateUsing(fn ($state) => Format::kcal($state))
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
 
                 Tables\Columns\TextColumn::make('total_cost_per_portion')
                     ->numeric()
-                    ->formatStateUsing(function ($state) {
-                        return 'Rp.' . $state;
-                    })
+                    ->formatStateUsing(fn ($state) => Format::idr($state))
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: false),
 
@@ -323,55 +317,22 @@ class RecipeResource extends Resource
      * Compute row-level totals and overall per-portion totals from a full repeater snapshot.
      * Writes back the normalized repeater state once to avoid race/flicker.
      */
+    /**
+     * Single source of truth for form-side recompute.
+     * Keeps the same signature so your existing calls don't change.
+     */
     protected static function computeRowsAndTotals(array $rows, Set $set, Get $get): void
     {
-        // Batch-load ingredients used in rows
-        $ids = collect($rows)->pluck('ingredient_id')->filter()->unique()->values();
-
-        $ingredientMap = Ingredient::query()
-            ->whereIn('id', $ids)
-            ->get(['id', 'cost_per_unit', 'calorie_per_unit'])
-            ->keyBy('id');
-
-        $totalCost = 0.0;
-        $totalCal  = 0.0;
-
-        $normalized = [];
-
-        foreach ($rows as $i => $row) {
-            $id  = $row['ingredient_id'] ?? null;
-            $qty = (float) ($row['quantity'] ?? 0);
-
-            $costPerUnit = ($id && $ingredientMap->has($id)) ? (float) $ingredientMap[$id]->cost_per_unit : 0.0;
-            $calPerUnit  = ($id && $ingredientMap->has($id)) ? (float) $ingredientMap[$id]->calorie_per_unit : 0.0;
-
-            $rowCost = $qty * $costPerUnit;
-            $rowCal  = $qty * $calPerUnit;
-
-            $totalCost += $rowCost;
-            $totalCal  += $rowCal;
-
-            // Normalize row (UI-only fields)
-            $normalized[$i] = array_merge($row, [
-                'ingredient_total_cost'     => self::fmt($rowCost),
-                'ingredient_total_calorie'  => self::fmt($rowCal),
-            ]);
-        }
-
-        // Single write for the entire repeater to keep UI consistent
-        $set('ingredients', array_values($normalized));
-
-        // Per-portion totals (if portion_size <= 0, keep 0 to match your previous behavior)
         $portion = (float) ($get('portion_size') ?? 0);
-        $costPerPortion = $portion > 0 ? ($totalCost / $portion) : 0.0;
-        $calPerPortion  = $portion > 0 ? ($totalCal  / $portion) : 0.0;
 
-        $set('total_cost_per_portion',    self::fmt($costPerPortion));
-        $set('total_calorie_per_portion', self::fmt($calPerPortion));
+        /** @var RecipeFormCalculator $svc */
+        $svc  = app(RecipeFormCalculator::class);
+        $calc = $svc->compute($rows, $portion, true); // formatted strings for UI
+
+        // Write back exactly like before (minimizes UI bugs/race conditions)
+        $set('ingredients', $calc['rows']);
+        $set('total_cost_per_portion',    $calc['total_cost_per_portion']);
+        $set('total_calorie_per_portion', $calc['total_calorie_per_portion']);
     }
 
-    protected static function fmt(float $n): string
-    {
-        return number_format($n, 2, '.', '');
-    }
 }

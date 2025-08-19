@@ -4,6 +4,8 @@ namespace App\Models;
 
 use App\Traits\BelongsToCompany;
 use Illuminate\Database\Eloquent\Model;
+use App\Models\Builders\ProductBuilder;
+use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
 
 class Product extends Model
 {
@@ -17,6 +19,11 @@ class Product extends Model
         'notes',
         'company_id',
     ];
+
+    public function newEloquentBuilder($query): EloquentBuilder
+    {
+        return new ProductBuilder($query);
+    }
 
     public function recipes()
     {
