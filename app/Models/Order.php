@@ -2,11 +2,14 @@
 
 namespace App\Models;
 
+use App\Traits\BelongsToCompany;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Auth;
 
 class Order extends Model
 {
+    use BelongsToCompany;
+
     protected $fillable = [
         'customer_id',
         'address_id',
@@ -21,6 +24,7 @@ class Order extends Model
         'deposit_required',
         'deposit_amount',
         'notes',
+        'company_id',
     ];
 
     protected $casts = [

@@ -27,6 +27,23 @@ class OrderResource extends Resource
     {
         return $form
             ->schema([
+                Forms\Components\Grid::make(1)
+                    ->schema([
+                        Forms\Components\Select::make('company_id')
+                            ->label('Company')
+                            ->relationship('company', 'name')
+                            ->required()
+                            ->visible(fn() => auth()->user()?->isSuperAdmin()) // admins don’t see this
+                            ->live() // so dependent fields can react
+                            ->afterStateUpdated(function (Set $set) {
+                                // reset dependent selects when company changes
+                                foreach (['customer_id', 'address_id', 'courier_id'] as $field) {
+                                    if (property_exists((object)[], $field)) {
+                                    } // no-op; keep static analyzer happy
+                                    $set($field, null);
+                                }
+                            }),
+                    ]),
                 Forms\Components\Grid::make(2)
                     ->schema([
                         Forms\Components\TextInput::make('customer_name')
@@ -60,15 +77,15 @@ class OrderResource extends Resource
                                 $cid = $get('customer_id');
                                 return $cid
                                     ? Address::where('customer_id', $cid)
-                                        ->orderByDesc('is_default')
-                                        ->orderBy('label')
-                                        ->pluck('label', 'id')
+                                    ->orderByDesc('is_default')
+                                    ->orderBy('label')
+                                    ->pluck('label', 'id')
                                     : [];
                             })
-                            ->disabled(fn (callable $get) => ! $get('customer_id'))
+                            ->disabled(fn(callable $get) => ! $get('customer_id'))
                             ->searchable()
                             ->createOptionForm([
-                                Forms\Components\Hidden::make('customer_id')->default(fn (callable $get) => $get('customer_id')),
+                                Forms\Components\Hidden::make('customer_id')->default(fn(callable $get) => $get('customer_id')),
                                 Forms\Components\TextInput::make('label'),
                                 Forms\Components\TextInput::make('line1')->required(),
                                 Forms\Components\TextInput::make('line2'),
@@ -83,7 +100,7 @@ class OrderResource extends Resource
 
                         Forms\Components\Actions::make([
                             Forms\Components\Actions\Action::make('Snapshot customer to order contact')
-                                ->visible(fn (callable $get) => filled($get('customer_id')))
+                                ->visible(fn(callable $get) => filled($get('customer_id')))
                                 ->action(function (array $data, callable $set) {
                                     $customer = Customer::find($data['customer_id'] ?? null);
                                     if ($customer) {
@@ -153,169 +170,172 @@ class OrderResource extends Resource
                             ->columns(4)
                             ->createItemButtonLabel('Add Product'),
                     ]),
-                    Forms\Components\Section::make('Payments')
-    ->collapsible()
-    ->schema([
+                Forms\Components\Section::make('Payments')
+                    ->collapsible()
+                    ->schema([
 
-        // Live summary from current form state (not just DB)
-        Forms\Components\Placeholder::make('payment_summary')
-            ->label('Summary')
-            ->content(function (Get $get) {
-                $rows = $get('payments') ?? [];
-                $paid = 0.0; $refund = 0.0;
+                        // Live summary from current form state (not just DB)
+                        Forms\Components\Placeholder::make('payment_summary')
+                            ->label('Summary')
+                            ->content(function (Get $get) {
+                                $rows = $get('payments') ?? [];
+                                $paid = 0.0;
+                                $refund = 0.0;
 
-                foreach ($rows as $row) {
-                    $amount = (float) ($row['amount'] ?? 0);
-                    $type   = (string) ($row['type'] ?? '');
-                    $status = (string) ($row['status'] ?? '');
+                                foreach ($rows as $row) {
+                                    $amount = (float) ($row['amount'] ?? 0);
+                                    $type   = (string) ($row['type'] ?? '');
+                                    $status = (string) ($row['status'] ?? '');
 
-                    if ($status === 'paid') {
-                        if ($type === 'refund') {
-                            $refund += $amount;
-                        } else {
-                            $paid += $amount;
-                        }
-                    }
-                }
+                                    if ($status === 'paid') {
+                                        if ($type === 'refund') {
+                                            $refund += $amount;
+                                        } else {
+                                            $paid += $amount;
+                                        }
+                                    }
+                                }
 
-                $paidNet   = $paid - $refund;
-                $total     = (float) ($get('total_price') ?? 0);
-                $balance   = max(0, $total - $paidNet);
+                                $paidNet   = $paid - $refund;
+                                $total     = (float) ($get('total_price') ?? 0);
+                                $balance   = max(0, $total - $paidNet);
 
-                $fmt = fn ($n) => 'Rp.' . number_format((float)$n, 2, '.', ',');
+                                $fmt = fn($n) => 'Rp.' . number_format((float)$n, 2, '.', ',');
 
-                return "Paid: {$fmt($paidNet)}  •  Order Total: {$fmt($total)}  •  Balance Due: {$fmt($balance)}";
-            }),
+                                return "Paid: {$fmt($paidNet)}  •  Order Total: {$fmt($total)}  •  Balance Due: {$fmt($balance)}";
+                            }),
 
-        // Inline hasMany editor for payments
-        Forms\Components\Repeater::make('payments')
-            ->relationship('payments')      // hasMany(Payment::class)
-            ->defaultItems(0)
-            ->reorderable(false)
-            ->columns(12)
-            ->schema([
-                Forms\Components\Select::make('type')
-                    ->options([
-                        'deposit' => 'Deposit',
-                        'balance' => 'Balance',
-                        'full'    => 'Full',
-                        'refund'  => 'Refund',
-                    ])
-                    ->native(false)
-                    ->required()
-                    ->columnSpan(2),
+                        // Inline hasMany editor for payments
+                        Forms\Components\Repeater::make('payments')
+                            ->relationship('payments')      // hasMany(Payment::class)
+                            ->defaultItems(0)
+                            ->reorderable(false)
+                            ->columns(12)
+                            ->schema([
+                                Forms\Components\Select::make('type')
+                                    ->options([
+                                        'deposit' => 'Deposit',
+                                        'balance' => 'Balance',
+                                        'full'    => 'Full',
+                                        'refund'  => 'Refund',
+                                    ])
+                                    ->native(false)
+                                    ->required()
+                                    ->columnSpan(2),
 
-                Forms\Components\Select::make('method')
-                    ->options([
-                        'cash'          => 'Cash',
-                        'bank_transfer' => 'Bank Transfer',
-                        'ewallet'       => 'eWallet',
-                        'card'          => 'Card',
-                        'other'         => 'Other',
-                    ])
-                    ->native(false)
-                    ->required()
-                    ->columnSpan(2),
+                                Forms\Components\Select::make('method')
+                                    ->options([
+                                        'cash'          => 'Cash',
+                                        'bank_transfer' => 'Bank Transfer',
+                                        'ewallet'       => 'eWallet',
+                                        'card'          => 'Card',
+                                        'other'         => 'Other',
+                                    ])
+                                    ->native(false)
+                                    ->required()
+                                    ->columnSpan(2),
 
-                Forms\Components\TextInput::make('amount')
-                    ->numeric()
-                    ->prefix('Rp.')
-                    ->required()
-                    ->columnSpan(3),
+                                Forms\Components\TextInput::make('amount')
+                                    ->numeric()
+                                    ->prefix('Rp.')
+                                    ->required()
+                                    ->columnSpan(3),
 
-                Forms\Components\Select::make('status')
-                    ->options([
-                        'pending'  => 'Pending',
-                        'paid'     => 'Paid',
-                        'failed'   => 'Failed',
-                        'refunded' => 'Refunded',
-                    ])
-                    ->native(false)
-                    ->required()
-                    ->columnSpan(2),
+                                Forms\Components\Select::make('status')
+                                    ->options([
+                                        'pending'  => 'Pending',
+                                        'paid'     => 'Paid',
+                                        'failed'   => 'Failed',
+                                        'refunded' => 'Refunded',
+                                    ])
+                                    ->native(false)
+                                    ->required()
+                                    ->columnSpan(2),
 
-                Forms\Components\DateTimePicker::make('paid_at')
-                    ->native(false)
-                    ->seconds(false)
-                    ->label('Paid at')
-                    ->columnSpan(3),
+                                Forms\Components\DateTimePicker::make('paid_at')
+                                    ->native(false)
+                                    ->seconds(false)
+                                    ->label('Paid at')
+                                    ->columnSpan(3),
 
-                Forms\Components\TextInput::make('reference')
-                    ->label('Reference')
-                    ->placeholder('Bank ref / VA / Txn ID')
-                    ->columnSpan(6),
+                                Forms\Components\TextInput::make('reference')
+                                    ->label('Reference')
+                                    ->placeholder('Bank ref / VA / Txn ID')
+                                    ->columnSpan(6),
 
-                Forms\Components\Textarea::make('notes')
-                    ->rows(2)
-                    ->columnSpan(6),
-            ])
+                                Forms\Components\Textarea::make('notes')
+                                    ->rows(2)
+                                    ->columnSpan(6),
+                            ])
 
-            // Normalize each row before create/save
-            ->mutateRelationshipDataBeforeCreateUsing(function (array $data) {
-                $data['amount'] = isset($data['amount']) ? (float) $data['amount'] : 0.0;
-                $data['reference'] = trim((string) ($data['reference'] ?? ''));
-                $data['notes'] = trim((string) ($data['notes'] ?? ''));
-                return $data;
-            })
-            ->mutateRelationshipDataBeforeSaveUsing(function (array $data) {
-                $data['amount'] = isset($data['amount']) ? (float) $data['amount'] : 0.0;
-                $data['reference'] = trim((string) ($data['reference'] ?? ''));
-                $data['notes'] = trim((string) ($data['notes'] ?? ''));
-                return $data;
-            }),
+                            // Normalize each row before create/save
+                            ->mutateRelationshipDataBeforeCreateUsing(function (array $data) {
+                                $data['amount'] = isset($data['amount']) ? (float) $data['amount'] : 0.0;
+                                $data['reference'] = trim((string) ($data['reference'] ?? ''));
+                                $data['notes'] = trim((string) ($data['notes'] ?? ''));
+                                return $data;
+                            })
+                            ->mutateRelationshipDataBeforeSaveUsing(function (array $data) {
+                                $data['amount'] = isset($data['amount']) ? (float) $data['amount'] : 0.0;
+                                $data['reference'] = trim((string) ($data['reference'] ?? ''));
+                                $data['notes'] = trim((string) ($data['notes'] ?? ''));
+                                return $data;
+                            }),
 
-        // Helper actions to prefill rows quickly
-        Forms\Components\Actions::make([
-            \Filament\Forms\Components\Actions\Action::make('addDeposit')
-                ->label('Add deposit (from order deposit amount)')
-                ->visible(fn (Get $get) => (bool) $get('deposit_required') && (float) ($get('deposit_amount') ?? 0) > 0)
-                ->action(function (Get $get, Set $set) {
-                    $rows = $get('payments') ?? [];
-                    $rows[] = [
-                        'type'    => 'deposit',
-                        'method'  => 'cash',
-                        'amount'  => (float) ($get('deposit_amount') ?? 0),
-                        'status'  => 'pending',
-                        'paid_at' => null,
-                        'reference' => null,
-                        'notes'     => null,
-                    ];
-                    $set('payments', $rows);
-                }),
+                        // Helper actions to prefill rows quickly
+                        Forms\Components\Actions::make([
+                            \Filament\Forms\Components\Actions\Action::make('addDeposit')
+                                ->label('Add deposit (from order deposit amount)')
+                                ->visible(fn(Get $get) => (bool) $get('deposit_required') && (float) ($get('deposit_amount') ?? 0) > 0)
+                                ->action(function (Get $get, Set $set) {
+                                    $rows = $get('payments') ?? [];
+                                    $rows[] = [
+                                        'type'    => 'deposit',
+                                        'method'  => 'cash',
+                                        'amount'  => (float) ($get('deposit_amount') ?? 0),
+                                        'status'  => 'pending',
+                                        'paid_at' => null,
+                                        'reference' => null,
+                                        'notes'     => null,
+                                    ];
+                                    $set('payments', $rows);
+                                }),
 
-            \Filament\Forms\Components\Actions\Action::make('addBalanceFromDue')
-                ->label('Add balance (from current balance due)')
-                ->action(function (Get $get, Set $set) {
-                    $rows = $get('payments') ?? [];
-                    // recompute due from current rows
-                    $paid = 0.0; $refund = 0.0;
-                    foreach ($rows as $row) {
-                        $amt = (float) ($row['amount'] ?? 0);
-                        $typ = (string) ($row['type'] ?? '');
-                        $sts = (string) ($row['status'] ?? '');
-                        if ($sts === 'paid') {
-                            if ($typ === 'refund') $refund += $amt; else $paid += $amt;
-                        }
-                    }
-                    $paidNet = $paid - $refund;
-                    $total   = (float) ($get('total_price') ?? 0);
-                    $due     = max(0, $total - $paidNet);
+                            \Filament\Forms\Components\Actions\Action::make('addBalanceFromDue')
+                                ->label('Add balance (from current balance due)')
+                                ->action(function (Get $get, Set $set) {
+                                    $rows = $get('payments') ?? [];
+                                    // recompute due from current rows
+                                    $paid = 0.0;
+                                    $refund = 0.0;
+                                    foreach ($rows as $row) {
+                                        $amt = (float) ($row['amount'] ?? 0);
+                                        $typ = (string) ($row['type'] ?? '');
+                                        $sts = (string) ($row['status'] ?? '');
+                                        if ($sts === 'paid') {
+                                            if ($typ === 'refund') $refund += $amt;
+                                            else $paid += $amt;
+                                        }
+                                    }
+                                    $paidNet = $paid - $refund;
+                                    $total   = (float) ($get('total_price') ?? 0);
+                                    $due     = max(0, $total - $paidNet);
 
-                    if ($due <= 0) return;
+                                    if ($due <= 0) return;
 
-                    $rows[] = [
-                        'type'    => 'balance',
-                        'method'  => 'cash',
-                        'amount'  => $due,
-                        'status'  => 'pending',
-                        'paid_at' => null,
-                        'reference' => null,
-                        'notes'     => null,
-                    ];
-                    $set('payments', $rows);
-                }),
-        ])->alignment('left'),
-    ]),
+                                    $rows[] = [
+                                        'type'    => 'balance',
+                                        'method'  => 'cash',
+                                        'amount'  => $due,
+                                        'status'  => 'pending',
+                                        'paid_at' => null,
+                                        'reference' => null,
+                                        'notes'     => null,
+                                    ];
+                                    $set('payments', $rows);
+                                }),
+                        ])->alignment('left'),
+                    ]),
 
                 Forms\Components\Section::make('Delivery & Courier')
                     ->collapsible()
@@ -387,7 +407,7 @@ class OrderResource extends Resource
                         Forms\Components\Actions::make([
                             \Filament\Forms\Components\Actions\Action::make('snapshotFromOrderAddress')
                                 ->label('Use order address for delivery snapshot')
-                                ->visible(fn (Get $get) => filled($get('address_id')))
+                                ->visible(fn(Get $get) => filled($get('address_id')))
                                 ->requiresConfirmation()
                                 ->action(function (Get $get, Set $set) {
                                     $addrId = $get('address_id');
@@ -415,7 +435,7 @@ class OrderResource extends Resource
 
                             \Filament\Forms\Components\Actions\Action::make('snapshotCourierName')
                                 ->label('Snapshot current courier name')
-                                ->visible(fn (Get $get) => filled($get('delivery.courier_id')))
+                                ->visible(fn(Get $get) => filled($get('delivery.courier_id')))
                                 ->action(function (Get $get, Set $set) {
                                     $courierId = $get('delivery.courier_id');
                                     $c = $courierId ? \App\Models\Courier::find($courierId) : null;
@@ -426,7 +446,7 @@ class OrderResource extends Resource
 
                             \Filament\Forms\Components\Actions\Action::make('snapshotContactFromOrder')
                                 ->label('Use order contact for delivery contact')
-                                ->visible(fn (Get $get) => filled($get('customer_name')) || filled($get('customer_phone')))
+                                ->visible(fn(Get $get) => filled($get('customer_name')) || filled($get('customer_phone')))
                                 ->action(function (Get $get, Set $set) {
                                     $set('delivery.contact_name',  $get('customer_name'));
                                     $set('delivery.contact_phone', $get('customer_phone'));
@@ -458,16 +478,16 @@ class OrderResource extends Resource
 
                 Tables\Columns\TextColumn::make('paid_total')
                     ->label('Paid')
-                    ->state(fn ($record) => $record->paid_total)
-                    ->formatStateUsing(fn ($state) => 'Rp.' . number_format((float)$state, 2, '.', ','))
+                    ->state(fn($record) => $record->paid_total)
+                    ->formatStateUsing(fn($state) => 'Rp.' . number_format((float)$state, 2, '.', ','))
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: false),
 
                 Tables\Columns\TextColumn::make('balance_due')
                     ->label('Balance')
-                    ->state(fn ($record) => $record->balance_due)
-                    ->formatStateUsing(fn ($state) => 'Rp.' . number_format((float)$state, 2, '.', ','))
-                    ->color(fn ($state) => (float)$state > 0 ? 'danger' : 'success')
+                    ->state(fn($record) => $record->balance_due)
+                    ->formatStateUsing(fn($state) => 'Rp.' . number_format((float)$state, 2, '.', ','))
+                    ->color(fn($state) => (float)$state > 0 ? 'danger' : 'success')
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: false),
 
@@ -483,9 +503,10 @@ class OrderResource extends Resource
 
                 Tables\Columns\TextColumn::make('products_list')
                     ->label('Products')
-                    ->getStateUsing(fn ($record) => $record->products
-                        ->map(fn ($item) => e($item->name) . " ({$item->pivot->quantity}ps)")
-                        ->implode('<br>')
+                    ->getStateUsing(
+                        fn($record) => $record->products
+                            ->map(fn($item) => e($item->name) . " ({$item->pivot->quantity}ps)")
+                            ->implode('<br>')
                     )
                     ->html()      // allow <br>
                     ->wrap()
@@ -495,32 +516,32 @@ class OrderResource extends Resource
             ])
             ->actions([
                 Action::make('details')
-                ->label('Details')
-                ->icon('heroicon-o-eye')
-                ->url(fn ($record) => static::getUrl('details', ['record' => $record]))
-                ->openUrlInNewTab(false),
+                    ->label('Details')
+                    ->icon('heroicon-o-eye')
+                    ->url(fn($record) => static::getUrl('details', ['record' => $record]))
+                    ->openUrlInNewTab(false),
                 Tables\Actions\EditAction::make(),
             ])
             ->bulkActions([
-                    Tables\Actions\BulkAction::make('selectionDetails')
-                        ->label('View selection details')
-                        ->icon('heroicon-o-eye')
-                        ->color('primary')
-                        ->action(function (Collection $records) {
-                            $ids = $records->pluck('id')->all();
-                            if (empty($ids)) return;
+                Tables\Actions\BulkAction::make('selectionDetails')
+                    ->label('View selection details')
+                    ->icon('heroicon-o-eye')
+                    ->color('primary')
+                    ->action(function (Collection $records) {
+                        $ids = $records->pluck('id')->all();
+                        if (empty($ids)) return;
 
-                            // keep in session (optional but handy)
-                            session()->put('orders.table.selected', $ids);
+                        // keep in session (optional but handy)
+                        session()->put('orders.table.selected', $ids);
 
-                            // go to the combined report page for these IDs
-                            return redirect(
-                                static::getUrl('selection', ['ids' => implode(',', $ids)])
-                            );
-                        }),
+                        // go to the combined report page for these IDs
+                        return redirect(
+                            static::getUrl('selection', ['ids' => implode(',', $ids)])
+                        );
+                    }),
 
-                    Tables\Actions\DeleteBulkAction::make()
-                        ->deselectRecordsAfterCompletion(),
+                Tables\Actions\DeleteBulkAction::make()
+                    ->deselectRecordsAfterCompletion(),
 
             ]);
     }

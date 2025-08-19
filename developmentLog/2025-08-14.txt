@@ -3,24 +3,24 @@ Aug 13, 2025 – 20:00 WIB
 Tasks Completed:
 - Finished creating Order, Product, Recipe, and all detail entities (Customer, Payment, Delivery).
 - Finished creating real live scenario seeder.
-
-Next Focus:
 - need to test the migration file
-- Discuss front page for calculation to be built with React.js, with exportable mobile view.
 - Create dashboard view with:
   * Sales graph
   * List of orders
   * List of most used ingredients
   * List of most created recipes
   * List of most ordered products
+- Add "Add New Data" button to each data table (currently missing)
+
+Next Focus:
 - Create PDF export functions:
   * Export orders by date range (including product list)
   * Export products to be created by date range (by order)
   * Export ingredients to be purchased by date range (by order)
   * Export recipes to be cooked by date range (by order)
-- Add "Add New Data" button to each data table (currently missing).
 - Implement role-based access:
   * Every data record assigned to a person or company
   * No public sharing (except ingredients)
   * All accessible by Superadmin
 - Create a Python scraper to fetch ingredient data from an external source.
+- Discuss front page for calculation to be built with React.js, with exportable mobile view.

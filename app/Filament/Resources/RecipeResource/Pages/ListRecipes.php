@@ -46,6 +46,7 @@ class ListRecipes extends ListRecords
     protected function getHeaderActions(): array
     {
         return [
+            Actions\CreateAction::make(),
             Actions\Action::make('clearSelection')
                 ->label('Clear selection')
                 ->icon('heroicon-o-x-mark')

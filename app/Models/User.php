@@ -45,4 +45,14 @@ class User extends Authenticatable
             'password' => 'hashed',
         ];
     }
+
+    public function company()
+    {
+        return $this->belongsTo(\App\Models\Company::class);
+    }
+
+    public function isSuperAdmin(): bool
+    {
+        return ($this->role ?? null) === 'super_admin';
+    }
 }

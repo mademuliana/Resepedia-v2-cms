@@ -11,19 +11,22 @@ class RecipesSeeder extends Seeder
 {
     public function run(): void
     {
-        $recipes = [
-            ['name' => 'Grilled Chicken',     'prep' => 30, 'portion' => 250],
-            ['name' => 'Garlic Rice',         'prep' => 20, 'portion' => 200],
-            ['name' => 'Beef Stir-fry',       'prep' => 25, 'portion' => 250],
-            ['name' => 'Tofu Teriyaki',       'prep' => 20, 'portion' => 220],
-            ['name' => 'Tempeh Sambal',       'prep' => 20, 'portion' => 220],
-            ['name' => 'Steamed Broccoli',    'prep' => 15, 'portion' => 150],
-            ['name' => 'Carrot Stir-fry',     'prep' => 15, 'portion' => 180],
-            ['name' => 'Spinach Garlic Sauté','prep' => 10, 'portion' => 150],
-        ];
+        $companies = DB::table('companies')->pluck('id', 'name');
 
-        // Ingredient mapping (by name) to make deterministic combos
-        $pick = fn($names) => Ingredient::whereIn('name', $names)->get()->keyBy('name');
+        // Up to 10 recipes available; we’ll slice per company based on offset
+        $recipes = [
+            ['Grilled Chicken', 30, 250],
+            ['Garlic Rice', 20, 200],
+            ['Beef Stir-fry', 25, 250],
+            ['Tofu Teriyaki', 20, 220],
+            ['Tempeh Sambal', 20, 220],
+            ['Steamed Broccoli', 15, 150],
+            ['Carrot Stir-fry', 15, 180],
+            ['Spinach Garlic Sauté', 10, 150],
+            // extras (for +1/+2)
+            ['Brown Rice', 25, 200],
+            ['Mixed Veg Stir-fry', 18, 220],
+        ];
 
         $plans = [
             'Grilled Chicken'      => ['Chicken Breast','Olive Oil','Salt','Garlic'],
@@ -34,63 +37,49 @@ class RecipesSeeder extends Seeder
             'Steamed Broccoli'     => ['Broccoli','Salt','Olive Oil'],
             'Carrot Stir-fry'      => ['Carrot','Garlic','Coconut Oil','Salt'],
             'Spinach Garlic Sauté' => ['Spinach','Garlic','Olive Oil','Salt'],
+            'Brown Rice'           => ['Brown Rice','Salt','Coconut Oil'],
+            'Mixed Veg Stir-fry'   => ['Broccoli','Carrot','Spinach','Olive Oil','Salt','Garlic'],
         ];
 
-        // Base qtys (grams or ml) by ingredient name (approximate realistic)
         $baseQty = [
-            'Chicken Breast' => 180, 'Beef Sirloin' => 150, 'Tofu' => 180, 'Tempeh' => 180,
-            'Rice' => 180, 'Brown Rice' => 180, 'Broccoli' => 130, 'Carrot' => 150, 'Spinach' => 120,
-            'Olive Oil' => 10, 'Coconut Oil' => 10, 'Salt' => 3, 'Garlic' => 8, 'Onion' => 20, 'Chili' => 5,
+            'Chicken Breast'=>180,'Beef Sirloin'=>150,'Tofu'=>180,'Tempeh'=>180,
+            'Rice'=>180,'Brown Rice'=>180,'Broccoli'=>130,'Carrot'=>150,'Spinach'=>120,
+            'Olive Oil'=>10,'Coconut Oil'=>10,'Salt'=>3,'Garlic'=>8,'Onion'=>20,'Chili'=>5,
         ];
 
-        foreach ($recipes as $rd) {
-            $recipe = Recipe::firstOrCreate(
-                ['name' => $rd['name']],
-                [
-                    'prep_time_minutes' => $rd['prep'],
-                    'portion_size' => $rd['portion'],
-                    'total_calorie_per_portion' => 0,
-                    'total_cost_per_portion'    => 0,
-                    'notes' => null,
-                ]
-            );
+        $clamp = fn($n,$min,$max)=>max($min,min($max,$n));
+        foreach ($companies as $companyName => $companyId) {
+            $offset = (crc32((string) $companyId) % 5) - 2; // -2..+2
+            $target = $clamp(8 + $offset, 4, count($recipes));
 
-            $names = $plans[$rd['name']];
-            $ings  = $pick($names);
-
-            $totalCost = 0.0;
-            $totalCal  = 0.0;
-
-            foreach ($names as $ingName) {
-                $ing = $ings[$ingName];
-                $qty = $baseQty[$ingName] ?? 100;
-
-                $cost = $qty * (float) $ing->cost_per_unit;
-                $cal  = $qty * (float) $ing->calorie_per_unit;
-
-                DB::table('recipe_ingredient')->updateOrInsert(
-                    ['recipe_id' => $recipe->id, 'ingredient_id' => $ing->id],
-                    [
-                        'quantity'                 => $qty,
-                        'ingredient_total_cost'    => round($cost, 2),
-                        'ingredient_total_calorie' => round($cal, 2),
-                        'created_at'               => now(),
-                        'updated_at'               => now(),
-                    ]
+            foreach (array_slice($recipes, 0, $target) as [$name,$prep,$portion]) {
+                $recipe = Recipe::updateOrCreate(
+                    ['name'=>$name,'company_id'=>$companyId],
+                    ['prep_time_minutes'=>$prep,'portion_size'=>$portion,'total_calorie_per_portion'=>0,'total_cost_per_portion'=>0,'notes'=>null]
                 );
 
-                $totalCost += $cost;
-                $totalCal  += $cal;
+                $names = $plans[$name];
+                $ings  = Ingredient::whereIn('name', $names)->get()->keyBy('name');
+
+                $totalCost = 0.0; $totalCal = 0.0;
+                foreach ($names as $ingName) {
+                    $ing = $ings[$ingName]; $qty = $baseQty[$ingName] ?? 100;
+                    $cost = $qty * (float) $ing->cost_per_unit;
+                    $cal  = $qty * (float) $ing->calorie_per_unit;
+
+                    DB::table('recipe_ingredient')->updateOrInsert(
+                        ['recipe_id'=>$recipe->id,'ingredient_id'=>$ing->id],
+                        ['quantity'=>$qty,'ingredient_total_cost'=>round($cost,2),'ingredient_total_calorie'=>round($cal,2),'created_at'=>now(),'updated_at'=>now()]
+                    );
+                    $totalCost += $cost; $totalCal += $cal;
+                }
+
+                $portionF = (float) $portion;
+                $recipe->update([
+                    'total_cost_per_portion'    => $portionF>0? round($totalCost/$portionF,2):0,
+                    'total_calorie_per_portion' => $portionF>0? round($totalCal/$portionF,2):0,
+                ]);
             }
-
-            $portion = (float) $recipe->portion_size;
-            $perCost = $portion > 0 ? $totalCost / $portion : 0.0; // per gram/ml
-            $perCal  = $portion > 0 ? $totalCal / $portion : 0.0;  // per gram/ml
-
-            $recipe->update([
-                'total_cost_per_portion'    => round($perCost, 2),
-                'total_calorie_per_portion' => round($perCal, 2),
-            ]);
         }
     }
 }

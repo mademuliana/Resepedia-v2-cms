@@ -2,15 +2,18 @@
 
 namespace App\Models;
 
+use App\Traits\BelongsToCompany;
 use Illuminate\Database\Eloquent\Model;
 
 class Customer extends Model
 {
+    use BelongsToCompany;
     protected $fillable = [
         'name',
         'email',
         'phone',
         'notes',
+        'company_id',
     ];
 
     public function addresses()

@@ -14,11 +14,6 @@ class OrderDetails extends Page
 
     public Order $record;
 
-    /**
-     * Interpret product_recipe.quantity:
-     *  - 'mass'    => grams/ml of recipe included in ONE product
-     *  - 'portion' => portion count; 1 portion = recipe.portion_size grams/ml
-     */
     public string $recipeQtyMeaning = 'mass';
 
     /** Precomputed ingredient summary for the view. */

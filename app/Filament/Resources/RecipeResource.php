@@ -25,6 +25,23 @@ class RecipeResource extends Resource
         return $form->extraAttributes([
             'onkeydown' => 'if(event.key === "Enter"){ event.preventDefault(); }',
         ])->schema([
+            Forms\Components\Grid::make(1)
+                ->schema([
+                    Forms\Components\Select::make('company_id')
+                        ->label('Company')
+                        ->relationship('company', 'name')
+                        ->required()
+                        ->visible(fn() => auth()->user()?->isSuperAdmin()) // admins don’t see this
+                        ->live() // so dependent fields can react
+                        ->afterStateUpdated(function (Set $set) {
+                            // reset dependent selects when company changes
+                            foreach (['customer_id', 'address_id', 'courier_id'] as $field) {
+                                if (property_exists((object)[], $field)) {
+                                } // no-op; keep static analyzer happy
+                                $set($field, null);
+                            }
+                        }),
+                ]),
             Forms\Components\Grid::make(2)
                 ->schema([
                     Forms\Components\TextInput::make('name')
@@ -124,7 +141,7 @@ class RecipeResource extends Resource
                         ->relationship('steps')           // hasMany(RecipeStep::class)
                         ->defaultItems(0)
                         ->reorderable()                   // drag & drop order in UI
-                        ->itemLabel(fn (array $state): ?string => isset($state['step_no']) ? 'Step '.$state['step_no'] : null)
+                        ->itemLabel(fn(array $state): ?string => isset($state['step_no']) ? 'Step ' . $state['step_no'] : null)
                         ->columns(12)
                         ->schema([
                             Forms\Components\TextInput::make('step_no')
@@ -220,7 +237,7 @@ class RecipeResource extends Resource
                         return $state . ' kcal';
                     })
                     ->sortable()
-                    ->toggleable(isToggledHiddenByDefault: false),
+                    ->toggleable(isToggledHiddenByDefault: true),
 
                 Tables\Columns\TextColumn::make('total_cost_per_portion')
                     ->numeric()
@@ -232,9 +249,10 @@ class RecipeResource extends Resource
 
                 Tables\Columns\TextColumn::make('ingredients_list')
                     ->label('Ingredients')
-                    ->getStateUsing(fn ($record) => $record->ingredients
-                    ->map(fn($item) => $item->name . ' (' . $item->pivot->quantity . ' ' . $item->unit . ')')
-                        ->implode('<br>')
+                    ->getStateUsing(
+                        fn($record) => $record->ingredients
+                            ->map(fn($item) => $item->name . ' (' . $item->pivot->quantity . ' ' . $item->unit . ')')
+                            ->implode('<br>')
                     )
                     ->html()      // allow <br>
                     ->wrap()
@@ -255,6 +273,7 @@ class RecipeResource extends Resource
             ])
             ->actions([
                 Tables\Actions\EditAction::make(),
+                Tables\Actions\ViewAction::make(),
             ])
             ->bulkActions([
                 Tables\Actions\BulkAction::make('selectionDetails')
@@ -291,6 +310,7 @@ class RecipeResource extends Resource
             'create' => Pages\CreateRecipe::route('/create'),
             'edit' => Pages\EditRecipe::route('/{record}/edit'),
             'selection' => Pages\RecipeSelectionDetails::route('/selection-details'),
+            'view' => Pages\DetailRecipe::route('/{record}'),
         ];
     }
 

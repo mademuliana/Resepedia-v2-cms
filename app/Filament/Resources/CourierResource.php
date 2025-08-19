@@ -9,16 +9,34 @@ use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Filament\Forms\Set;
 
 class CourierResource extends Resource
 {
     protected static ?string $model = Courier::class;
     protected static ?string $navigationIcon = 'heroicon-o-truck';
-    protected static ?string $navigationGroup = 'Operations';
+    protected static ?string $navigationGroup = 'Master Data';
 
     public static function form(Form $form): Form
     {
         return $form->schema([
+            Forms\Components\Grid::make(1)
+                ->schema([
+                    Forms\Components\Select::make('company_id')
+                        ->label('Company')
+                        ->relationship('company', 'name')
+                        ->required()
+                        ->visible(fn() => auth()->user()?->isSuperAdmin()) // admins don’t see this
+                        ->live() // so dependent fields can react
+                        ->afterStateUpdated(function (Set $set) {
+                            // reset dependent selects when company changes
+                            foreach (['customer_id', 'address_id', 'courier_id'] as $field) {
+                                if (property_exists((object)[], $field)) {
+                                } // no-op; keep static analyzer happy
+                                $set($field, null);
+                            }
+                        }),
+                ]),
             Forms\Components\Section::make('Courier')
                 ->columns(2)
                 ->schema([
@@ -36,12 +54,12 @@ class CourierResource extends Resource
     public static function table(Table $table): Table
     {
         return $table->columns([
-                Tables\Columns\TextColumn::make('name')->searchable()->sortable(),
-                Tables\Columns\TextColumn::make('type')->badge()->sortable(),
-                Tables\Columns\IconColumn::make('active')->boolean()->sortable(),
-                Tables\Columns\TextColumn::make('phone')->toggleable(),
-                Tables\Columns\TextColumn::make('created_at')->dateTime()->since()->label('Created'),
-            ])
+            Tables\Columns\TextColumn::make('name')->searchable()->sortable(),
+            Tables\Columns\TextColumn::make('type')->badge()->sortable(),
+            Tables\Columns\IconColumn::make('active')->boolean()->sortable(),
+            Tables\Columns\TextColumn::make('phone')->toggleable(),
+            Tables\Columns\TextColumn::make('created_at')->dateTime()->since()->label('Created'),
+        ])
             ->actions([Tables\Actions\EditAction::make()])
             ->bulkActions([Tables\Actions\DeleteBulkAction::make()]);
     }

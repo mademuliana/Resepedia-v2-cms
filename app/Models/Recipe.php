@@ -3,9 +3,11 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-
+use App\Traits\BelongsToCompany;
 class Recipe extends Model
 {
+    use BelongsToCompany;
+
     protected $fillable = [
         'name',
         'prep_time_minutes',
@@ -13,6 +15,7 @@ class Recipe extends Model
         'total_calorie_per_portion',
         'total_cost_per_portion',
         'notes',
+        'company_id',
     ];
 
     public function ingredients()

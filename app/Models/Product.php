@@ -2,16 +2,20 @@
 
 namespace App\Models;
 
+use App\Traits\BelongsToCompany;
 use Illuminate\Database\Eloquent\Model;
 
 class Product extends Model
 {
+    use BelongsToCompany;
+
     protected $fillable = [
         'name',
         'price',
         'total_calorie',
         'total_cost',
         'notes',
+        'company_id',
     ];
 
     public function recipes()

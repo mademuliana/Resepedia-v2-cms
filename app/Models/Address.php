@@ -3,9 +3,10 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-
+use App\Traits\BelongsToCompany;
 class Address extends Model
 {
+    use BelongsToCompany;
     protected $fillable = [
         'customer_id',
         'label',
@@ -18,6 +19,7 @@ class Address extends Model
         'latitude',
         'longitude',
         'is_default',
+        'company_id'
     ];
 
     protected $casts = [

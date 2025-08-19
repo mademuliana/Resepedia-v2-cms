@@ -23,6 +23,23 @@ class ProductResource extends Resource
     public static function form(Form $form): Form
     {
         return $form->schema([
+            Forms\Components\Grid::make(1)
+                ->schema([
+                    Forms\Components\Select::make('company_id')
+                        ->label('Company')
+                        ->relationship('company', 'name')
+                        ->required()
+                        ->visible(fn() => auth()->user()?->isSuperAdmin()) // admins don’t see this
+                        ->live() // so dependent fields can react
+                        ->afterStateUpdated(function (Set $set) {
+                            // reset dependent selects when company changes
+                            foreach (['customer_id', 'address_id', 'courier_id'] as $field) {
+                                if (property_exists((object)[], $field)) {
+                                } // no-op; keep static analyzer happy
+                                $set($field, null);
+                            }
+                        }),
+                ]),
             Forms\Components\Grid::make(4)
                 ->schema([
                     Forms\Components\TextInput::make('name')
@@ -130,9 +147,10 @@ class ProductResource extends Resource
 
                 Tables\Columns\TextColumn::make('recipes_list')
                     ->label('Recipes')
-                    ->getStateUsing(fn ($record) => $record->recipes
-                    ->map(fn($item) => $item->name . ' (' . $item->pivot->quantity . 'ps)')
-                        ->implode('<br>')
+                    ->getStateUsing(
+                        fn($record) => $record->recipes
+                            ->map(fn($item) => $item->name . ' (' . $item->pivot->quantity . 'ps)')
+                            ->implode('<br>')
                     )
                     ->html()      // allow <br>
                     ->wrap()
@@ -140,6 +158,7 @@ class ProductResource extends Resource
             ])
             ->actions([
                 Tables\Actions\EditAction::make(),
+                Tables\Actions\ViewAction::make(),
             ])
             ->bulkActions([
                 Tables\Actions\BulkAction::make('selectionDetails')
@@ -176,6 +195,7 @@ class ProductResource extends Resource
             'create' => Pages\CreateProduct::route('/create'),
             'edit' => Pages\EditProduct::route('/{record}/edit'),
             'selection' => Pages\ProductSelectionDetails::route('/selection-details'),
+            'view' => Pages\DetailProduct::route('/{record}'),
         ];
     }
 
