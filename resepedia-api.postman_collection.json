@@ -1,0 +1,323 @@
+{
+    "info": {
+        "name": "Resepedia API",
+        "_postman_id": "e5a3a4fa-2f5b-4c9c-9d3b-aaaaaaaaaaaa",
+        "description": "Postman collection for Resepedia API (Sanctum-protected). Log in to obtain a token, then use secured endpoints.",
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    },
+    "variable": [
+        { "key": "base_url", "value": "http://localhost:8000" },
+        { "key": "token", "value": "" },
+        { "key": "company_id", "value": "1" },
+        { "key": "product_id", "value": "1" },
+        { "key": "recipe_id", "value": "1" },
+        { "key": "cost", "value": "1" },
+        { "key": "calorie", "value": "1" },
+        { "key": "device_name", "value": "Postman" }
+    ],
+    "auth": {
+        "type": "bearer",
+        "bearer": [
+            { "key": "token", "value": "{{token}}", "type": "string" }
+        ]
+    },
+    "item": [{
+            "name": "Auth",
+            "item": [{
+                    "name": "Login (get token)",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            { "key": "Accept", "value": "application/json" },
+                            { "key": "Content-Type", "value": "application/json" }
+                        ],
+                        "auth": { "type": "noauth" },
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"email\": \"admin1@example.com\",\n  \"password\": \"resepedia\",\n  \"device_name\": \"{{device_name}}\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/login",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "login"]
+                        }
+                    },
+                    "event": [{
+                        "listen": "test",
+                        "script": {
+                            "type": "text/javascript",
+                            "exec": [
+                                "const json = pm.response.json();",
+                                "if (json && json.token) {",
+                                "  pm.collectionVariables.set('token', json.token);",
+                                "}",
+                                "if (json && json.user) {",
+                                "  if (json.user.company_id) pm.collectionVariables.set('company_id', json.user.company_id.toString());",
+                                "  if (json.user.id) pm.collectionVariables.set('user_id', json.user.id.toString());",
+                                "  if (json.user.role) pm.collectionVariables.set('role', json.user.role.toString());",
+                                "}",
+                                "pm.test('Login succeeded', function(){",
+                                "  pm.response.to.have.status(200);",
+                                "  pm.expect(json).to.have.property('token');",
+                                "});"
+                            ]
+                        }
+                    }]
+                },
+                {
+                    "name": "Issue new token",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            { "key": "Accept", "value": "application/json" },
+                            { "key": "Content-Type", "value": "application/json" }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/tokens/issue",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "tokens", "issue"]
+                        }
+                    }
+                },
+                {
+                    "name": "Revoke current token",
+                    "request": {
+                        "method": "DELETE",
+                        "header": [
+                            { "key": "Accept", "value": "application/json" },
+                            { "key": "Content-Type", "value": "application/json" }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/tokens/current",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "tokens", "current"]
+                        }
+                    }
+                },
+                {
+                    "name": "Logout (revoke all tokens)",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            { "key": "Accept", "value": "application/json" },
+                            { "key": "Content-Type", "value": "application/json" }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/logout",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "logout"]
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Product Builder",
+            "item": [{
+                    "name": "List Recipes (name + kcal/portion)",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            { "key": "Accept", "value": "application/json" },
+                            { "key": "Content-Type", "value": "application/json" }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/builder/recipes",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "builder", "recipes"]
+                        }
+                    }
+                },
+                {
+                    "name": "Compute Custom Product (no persist)",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            { "key": "Accept", "value": "application/json" },
+                            { "key": "Content-Type", "value": "application/json" }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"name\": \"Custom Bowl\",\n  \"persist\": false,\n  \"recipes\": [\n    {\"recipe_id\": \"{{recipe_id}}\", \"quantity\": 200},\n    {\"recipe_id\": 2, \"quantity\": 150}\n  ]\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/builder/compute-product",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "builder", "compute-product"]
+                        }
+                    }
+                },
+                {
+                    "name": "Persist Custom Product",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            { "key": "Accept", "value": "application/json" },
+                            { "key": "Content-Type", "value": "application/json" }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"name\": \"Custom Bowl\",\n  \"persist\": true,\n  \"recipes\": [\n    {\"recipe_id\": \"{{recipe_id}}\", \"quantity\": 200},\n    {\"recipe_id\": 2, \"quantity\": 150}\n  ]\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/builder/compute-product",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "builder", "compute-product"]
+                        }
+                    }
+                },
+                {
+                    "name": "Aggregate Ingredients for Custom Build",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            { "key": "Accept", "value": "application/json" },
+                            { "key": "Content-Type", "value": "application/json" }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"recipes\": [\n    {\"recipe_id\": \"{{recipe_id}}\", \"quantity\": 200},\n    {\"recipe_id\": 2, \"quantity\": 150}\n  ]\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/builder/ingredients",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "builder", "ingredients"]
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Catalog",
+            "item": [{
+                    "name": "Company Products",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            { "key": "Accept", "value": "application/json" },
+                            { "key": "Content-Type", "value": "application/json" }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/companies/{{company_id}}/products",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "companies", "{{company_id}}", "products"]
+                        }
+                    }
+                },
+                {
+                    "name": "Product Detail",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            { "key": "Accept", "value": "application/json" },
+                            { "key": "Content-Type", "value": "application/json" }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/companies/{{company_id}}/products/{{product_id}}",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "companies", "{{company_id}}", "products", "{{product_id}}"]
+                        }
+                    }
+                }
+            ]
+        },
+        {
+            "name": "Ingredients",
+            "item": [{
+                "name": "Ingredients (with filters)",
+                "request": {
+                    "method": "GET",
+                    "header": [
+                        { "key": "Accept", "value": "application/json" },
+                        { "key": "Content-Type", "value": "application/json" }
+                    ],
+                    "url": {
+                        "raw": "{{base_url}}/api/ingredients?cost={{cost}}&calorie={{calorie}}",
+                        "host": ["{{base_url}}"],
+                        "path": ["api", "ingredients"],
+                        "query": [
+                            { "key": "cost", "value": "{{cost}}" },
+                            { "key": "calorie", "value": "{{calorie}}" }
+                        ]
+                    }
+                }
+            }]
+        },
+        {
+            "name": "Orders",
+            "item": [{
+                    "name": "List Orders (by company)",
+                    "request": {
+                        "method": "GET",
+                        "header": [
+                            { "key": "Accept", "value": "application/json" },
+                            { "key": "Content-Type", "value": "application/json" }
+                        ],
+                        "url": {
+                            "raw": "{{base_url}}/api/companies/{{company_id}}/orders",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "companies", "{{company_id}}", "orders"]
+                        }
+                    }
+                },
+                {
+                    "name": "Create Customer (with address)",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            { "key": "Accept", "value": "application/json" },
+                            { "key": "Content-Type", "value": "application/json" }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"name\": \"John API\",\n  \"email\": \"john.api@example.com\",\n  \"phone\": \"628123456789\",\n  \"address\": {\n    \"label\": \"Home\",\n    \"line1\": \"Jl. Mawar No. 1\",\n    \"line2\": \"RT 01/RW 02\",\n    \"city\": \"Jakarta\",\n    \"state\": \"DKI\",\n    \"postal_code\": \"12345\",\n    \"country\": \"ID\",\n    \"latitude\": -6.2,\n    \"longitude\": 106.8\n  }\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/customers",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "customers"]
+                        }
+                    }
+                },
+                {
+                    "name": "Preview Ingredients (from items)",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            { "key": "Accept", "value": "application/json" },
+                            { "key": "Content-Type", "value": "application/json" }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"items\": [\n    {\"product_id\": \"{{product_id}}\", \"quantity\": 2},\n    {\"product_id\": 2, \"quantity\": 1}\n  ]\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/orders/preview-ingredients",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "orders", "preview-ingredients"]
+                        }
+                    }
+                },
+                {
+                    "name": "Create Order",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            { "key": "Accept", "value": "application/json" },
+                            { "key": "Content-Type", "value": "application/json" }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"customer_id\": 1,\n  \"address_id\": 1,\n  \"items\": [\n    {\"product_id\": \"{{product_id}}\", \"quantity\": 2}\n  ],\n  \"notes\": \"no peanuts\",\n  \"required_at\": \"2025-08-20 14:00:00\",\n  \"deposit_required\": true\n}"
+                        },
+                        "url": {
+                            "raw": "{{base_url}}/api/orders",
+                            "host": ["{{base_url}}"],
+                            "path": ["api", "orders"]
+                        }
+                    }
+                }
+            ]
+        }
+    ]
+}
