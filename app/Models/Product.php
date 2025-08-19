@@ -2,27 +2,40 @@
 
 namespace App\Models;
 
+use App\Traits\BelongsToCompany;
 use Illuminate\Database\Eloquent\Model;
+use App\Models\Builders\ProductBuilder;
+use Illuminate\Database\Eloquent\Builder as EloquentBuilder;
 
 class Product extends Model
 {
+    use BelongsToCompany;
+
     protected $fillable = [
         'name',
         'price',
         'total_calorie',
+        'total_cost',
+        'notes',
+        'company_id',
     ];
+
+    public function newEloquentBuilder($query): EloquentBuilder
+    {
+        return new ProductBuilder($query);
+    }
 
     public function recipes()
     {
         return $this->belongsToMany(Recipe::class, 'product_recipe')
-            ->withPivot(['quantity', 'total_price', 'total_calorie'])
+            ->withPivot(['quantity', 'recipe_total_cost', 'recipe_total_calorie'])
             ->withTimestamps();
     }
 
     public function orders()
     {
         return $this->belongsToMany(Order::class, 'order_items')
-            ->withPivot(['quantity', 'total_price', 'total_calorie'])
+            ->withPivot(['quantity', 'product_total_price', 'product_total_calorie'])
             ->withTimestamps();
     }
 }

@@ -5,6 +5,7 @@ namespace App\Filament\Resources\RecipeResource\Pages;
 use App\Filament\Resources\RecipeResource;
 use Filament\Actions;
 use Filament\Resources\Pages\EditRecord;
+use App\Services\Calculations\RecipeCalculator;
 
 class EditRecipe extends EditRecord
 {
@@ -15,5 +16,11 @@ class EditRecipe extends EditRecord
         return [
             Actions\DeleteAction::make(),
         ];
+    }
+
+    protected function afterSave(): void
+    {
+        $updates = app(RecipeCalculator::class)->recompute($this->record);
+        $this->record->update($updates);
     }
 }

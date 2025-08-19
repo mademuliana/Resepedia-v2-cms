@@ -11,6 +11,7 @@ return new class extends Migration {
             $table->id();
             $table->string('name');
             $table->decimal('price', 10, 2)->default(0);
+            $table->decimal('total_cost', 10, 2)->default(0);
             $table->decimal('total_calorie', 8, 2)->default(0);
             $table->timestamps();
         });

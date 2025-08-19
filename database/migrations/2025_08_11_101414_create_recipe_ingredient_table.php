@@ -12,8 +12,8 @@ return new class extends Migration {
             $table->foreignId('recipe_id')->constrained()->cascadeOnDelete();
             $table->foreignId('ingredient_id')->constrained()->cascadeOnDelete();
             $table->decimal('quantity', 10, 2)->default(0); // in grams/ml
-            $table->decimal('total_price', 10, 2)->default(0);
-            $table->decimal('total_calorie', 8, 2)->default(0);
+            $table->decimal('ingredient_total_cost', 10, 2)->default(0);
+            $table->decimal('ingredient_total_calorie', 8, 2)->default(0);
             $table->timestamps();
         });
     }

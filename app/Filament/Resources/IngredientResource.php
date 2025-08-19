@@ -3,21 +3,20 @@
 namespace App\Filament\Resources;
 
 use App\Filament\Resources\IngredientResource\Pages;
-use App\Filament\Resources\IngredientResource\RelationManagers;
 use App\Models\Ingredient;
 use Filament\Forms;
 use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
-use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\SoftDeletingScope;
+use App\Support\Format;
 
 class IngredientResource extends Resource
 {
     protected static ?string $model = Ingredient::class;
 
     protected static ?string $navigationIcon = 'heroicon-o-rectangle-stack';
+    protected static ?string $navigationGroup = 'Operations';
 
     public static function form(Form $form): Form
     {
@@ -36,7 +35,7 @@ class IngredientResource extends Resource
                     ->required()
                     ->numeric()
                     ->default(0.00),
-                Forms\Components\TextInput::make('price_per_unit')
+                Forms\Components\TextInput::make('cost_per_unit')
                     ->required()
                     ->numeric()
                     ->default(0.00),
@@ -58,9 +57,11 @@ class IngredientResource extends Resource
                 Tables\Columns\TextColumn::make('unit')
                     ->searchable(),
                 Tables\Columns\TextColumn::make('calorie_per_unit')
+                    ->formatStateUsing(fn ($state) => Format::kcal($state))
                     ->numeric()
                     ->sortable(),
-                Tables\Columns\TextColumn::make('price_per_unit')
+                Tables\Columns\TextColumn::make('cost_per_unit')
+                    ->formatStateUsing(fn ($state) => Format::idr($state))
                     ->numeric()
                     ->sortable(),
                 Tables\Columns\TextColumn::make('stock_quantity')

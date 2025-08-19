@@ -1,0 +1,14 @@
+Aug 13, 2025 – 08:00 WIB
+
+Tasks Completed:
+- Finished implementing calculation logic across all forms.
+- Completed selection function for tables.
+- Created Order detail page (layout still unsatisfactory).
+
+Next Focus:
+1. Create calculation for selected items:
+   - When selecting multiple Orders: Show all orders and their products with total calculation for each product, and show all ingredients with calculations.
+   - When selecting multiple Products: Show all products without calculation, and show all ingredients with calculations.
+   - When selecting multiple Recipes: Show all recipes without calculation, and show all ingredients with calculations.
+2. Create a Python scraper to fetch ingredient data from an external source.
+3. Build a front page with a simulation of the calculation system.

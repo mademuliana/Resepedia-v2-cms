@@ -13,7 +13,7 @@ return new class extends Migration {
             $table->string('type')->nullable(); // meat, veg, spice, etc.
             $table->string('unit', 20); // gram, kg, ml
             $table->decimal('calorie_per_unit', 8, 2)->default(0);
-            $table->decimal('price_per_unit', 10, 2)->default(0);
+            $table->decimal('cost_per_unit', 10, 2)->default(0);
             $table->decimal('stock_quantity', 10, 2)->default(0);
             $table->timestamps();
         });
